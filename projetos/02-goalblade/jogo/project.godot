@@ -1,0 +1,34 @@
+; GoalBlade — projeto Godot 4.7.2 (5×5 básico)
+; Decisões do dono (24/09/2026): começar só com o 5×5, passo fixo de 60/s,
+; bonecos e campo desenhados por código, câmera que segue a bola (com opção de seguir o jogador).
+
+config_version=5
+
+[application]
+
+config/name="GoalBlade"
+config/description="GoalBlade — futebol society 5×5 (0.1 em construção)"
+run/main_scene="res://cenas/partida.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+; v6 (celular liso): NÃO desenhar na resolução física da tela. Num celular comum isso
+; significa ~3x menos pixels por quadro (a maior economia de todas para o travamento).
+window/dpi/allow_hidpi=false
+
+[physics]
+
+common/physics_ticks_per_second=60
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true

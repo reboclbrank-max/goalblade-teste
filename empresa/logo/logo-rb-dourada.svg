@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="Monograma RB da Rebocl Brank">
+      <defs>
+        <linearGradient id="ouro" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#f0d97a"/>
+          <stop offset=".5" stop-color="#d4af37"/>
+          <stop offset="1" stop-color="#9c7a24"/>
+        </linearGradient>
+        <radialGradient id="fundoLogo" cx=".5" cy=".36" r=".85">
+          <stop offset="0" stop-color="#16120a"/>
+          <stop offset="1" stop-color="#0a0a0a"/>
+        </radialGradient>
+      </defs>
+      <rect x="8" y="8" width="224" height="224" rx="36" fill="url(#fundoLogo)" stroke="url(#ouro)" stroke-width="3"/>
+      <rect x="22" y="22" width="196" height="196" rx="26" fill="none" stroke="url(#ouro)" stroke-opacity=".35" stroke-width="1"/>
+      <text x="122" y="123" text-anchor="middle" dominant-baseline="central"
+            font-family="Georgia,'Times New Roman',serif" font-size="92" font-weight="bold"
+            letter-spacing="2" fill="url(#ouro)">RB</text>
+    </svg>

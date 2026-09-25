@@ -1,0 +1,387 @@
+{
+ "escala": 3,
+ "quadro": [
+  84,
+  152
+ ],
+ "itens": {
+  "nos_frente_parado": [
+   0,
+   0,
+   84,
+   152
+  ],
+  "nos_frente_corrida0": [
+   84,
+   0,
+   84,
+   152
+  ],
+  "nos_frente_corrida1": [
+   168,
+   0,
+   84,
+   152
+  ],
+  "nos_frente_corrida2": [
+   252,
+   0,
+   84,
+   152
+  ],
+  "nos_frente_corrida3": [
+   336,
+   0,
+   84,
+   152
+  ],
+  "nos_frente_chute": [
+   420,
+   0,
+   84,
+   152
+  ],
+  "nos_frente_comemora": [
+   504,
+   0,
+   84,
+   152
+  ],
+  "nos_lado_parado": [
+   588,
+   0,
+   84,
+   152
+  ],
+  "nos_lado_corrida0": [
+   672,
+   0,
+   84,
+   152
+  ],
+  "nos_lado_corrida1": [
+   756,
+   0,
+   84,
+   152
+  ],
+  "nos_lado_corrida2": [
+   840,
+   0,
+   84,
+   152
+  ],
+  "nos_lado_corrida3": [
+   924,
+   0,
+   84,
+   152
+  ],
+  "nos_lado_chute": [
+   1008,
+   0,
+   84,
+   152
+  ],
+  "nos_lado_comemora": [
+   1092,
+   0,
+   84,
+   152
+  ],
+  "nos_costas_parado": [
+   1176,
+   0,
+   84,
+   152
+  ],
+  "nos_costas_corrida0": [
+   1260,
+   0,
+   84,
+   152
+  ],
+  "nos_costas_corrida1": [
+   1344,
+   0,
+   84,
+   152
+  ],
+  "nos_costas_corrida2": [
+   1428,
+   0,
+   84,
+   152
+  ],
+  "nos_costas_corrida3": [
+   1512,
+   0,
+   84,
+   152
+  ],
+  "nos_costas_chute": [
+   1596,
+   0,
+   84,
+   152
+  ],
+  "nos_costas_comemora": [
+   1680,
+   0,
+   84,
+   152
+  ],
+  "eles_frente_parado": [
+   0,
+   152,
+   84,
+   152
+  ],
+  "eles_frente_corrida0": [
+   84,
+   152,
+   84,
+   152
+  ],
+  "eles_frente_corrida1": [
+   168,
+   152,
+   84,
+   152
+  ],
+  "eles_frente_corrida2": [
+   252,
+   152,
+   84,
+   152
+  ],
+  "eles_frente_corrida3": [
+   336,
+   152,
+   84,
+   152
+  ],
+  "eles_frente_chute": [
+   420,
+   152,
+   84,
+   152
+  ],
+  "eles_frente_comemora": [
+   504,
+   152,
+   84,
+   152
+  ],
+  "eles_lado_parado": [
+   588,
+   152,
+   84,
+   152
+  ],
+  "eles_lado_corrida0": [
+   672,
+   152,
+   84,
+   152
+  ],
+  "eles_lado_corrida1": [
+   756,
+   152,
+   84,
+   152
+  ],
+  "eles_lado_corrida2": [
+   840,
+   152,
+   84,
+   152
+  ],
+  "eles_lado_corrida3": [
+   924,
+   152,
+   84,
+   152
+  ],
+  "eles_lado_chute": [
+   1008,
+   152,
+   84,
+   152
+  ],
+  "eles_lado_comemora": [
+   1092,
+   152,
+   84,
+   152
+  ],
+  "eles_costas_parado": [
+   1176,
+   152,
+   84,
+   152
+  ],
+  "eles_costas_corrida0": [
+   1260,
+   152,
+   84,
+   152
+  ],
+  "eles_costas_corrida1": [
+   1344,
+   152,
+   84,
+   152
+  ],
+  "eles_costas_corrida2": [
+   1428,
+   152,
+   84,
+   152
+  ],
+  "eles_costas_corrida3": [
+   1512,
+   152,
+   84,
+   152
+  ],
+  "eles_costas_chute": [
+   1596,
+   152,
+   84,
+   152
+  ],
+  "eles_costas_comemora": [
+   1680,
+   152,
+   84,
+   152
+  ],
+  "goleiro_frente_parado": [
+   0,
+   304,
+   84,
+   152
+  ],
+  "goleiro_frente_corrida0": [
+   84,
+   304,
+   84,
+   152
+  ],
+  "goleiro_frente_corrida1": [
+   168,
+   304,
+   84,
+   152
+  ],
+  "goleiro_frente_corrida2": [
+   252,
+   304,
+   84,
+   152
+  ],
+  "goleiro_frente_corrida3": [
+   336,
+   304,
+   84,
+   152
+  ],
+  "goleiro_frente_chute": [
+   420,
+   304,
+   84,
+   152
+  ],
+  "goleiro_frente_comemora": [
+   504,
+   304,
+   84,
+   152
+  ],
+  "goleiro_lado_parado": [
+   588,
+   304,
+   84,
+   152
+  ],
+  "goleiro_lado_corrida0": [
+   672,
+   304,
+   84,
+   152
+  ],
+  "goleiro_lado_corrida1": [
+   756,
+   304,
+   84,
+   152
+  ],
+  "goleiro_lado_corrida2": [
+   840,
+   304,
+   84,
+   152
+  ],
+  "goleiro_lado_corrida3": [
+   924,
+   304,
+   84,
+   152
+  ],
+  "goleiro_lado_chute": [
+   1008,
+   304,
+   84,
+   152
+  ],
+  "goleiro_lado_comemora": [
+   1092,
+   304,
+   84,
+   152
+  ],
+  "goleiro_costas_parado": [
+   1176,
+   304,
+   84,
+   152
+  ],
+  "goleiro_costas_corrida0": [
+   1260,
+   304,
+   84,
+   152
+  ],
+  "goleiro_costas_corrida1": [
+   1344,
+   304,
+   84,
+   152
+  ],
+  "goleiro_costas_corrida2": [
+   1428,
+   304,
+   84,
+   152
+  ],
+  "goleiro_costas_corrida3": [
+   1512,
+   304,
+   84,
+   152
+  ],
+  "goleiro_costas_chute": [
+   1596,
+   304,
+   84,
+   152
+  ],
+  "goleiro_costas_comemora": [
+   1680,
+   304,
+   84,
+   152
+  ]
+ }
+}

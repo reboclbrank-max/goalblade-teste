@@ -1,0 +1,7 @@
+
+# cópias vivas de credenciais (não sobem para o repositório)
+/tools/
+
+# pastas de cache do Python (não são conteúdo do projeto)
+__pycache__/
+*.pyc

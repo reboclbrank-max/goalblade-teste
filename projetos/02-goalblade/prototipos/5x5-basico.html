@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>GOALBLADE — 5×5 básico (protótipo 3)</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0a1208;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#eef6ef;
+    -webkit-user-select:none;user-select:none}
+  #c{display:block;width:100vw;height:100vh;touch-action:none}
+  #placar{position:fixed;left:0;right:0;top:8px;text-align:center;pointer-events:none;
+    font:700 17px system-ui,sans-serif;text-shadow:0 2px 6px #000c;letter-spacing:.3px}
+  #placar span{opacity:.85;font-weight:600;font-size:14px}
+  #camBtn{position:fixed;right:10px;top:8px;pointer-events:auto;background:rgba(8,20,12,.72);
+    color:#dff0e2;border:1px solid rgba(255,255,255,.28);border-radius:999px;
+    padding:8px 13px;font:600 12.5px system-ui,sans-serif;cursor:pointer}
+  .dica{position:fixed;left:12px;bottom:10px;font-size:11.5px;line-height:1.4;opacity:.72;
+    text-shadow:0 1px 3px #000c;pointer-events:none;max-width:58vw}
+  #fim{position:fixed;inset:0;display:none;place-items:center;background:rgba(4,10,6,.72);
+    text-align:center;pointer-events:auto;cursor:pointer}
+  #fim div{font:700 26px system-ui,sans-serif;text-shadow:0 2px 10px #000}
+  #fim small{display:block;margin-top:10px;font:600 14px system-ui,sans-serif;opacity:.85}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="placar">NÓS <b>0</b> × <b>0</b> ELES &nbsp;<span id="relogio">1º tempo 3:00</span></div>
+<button id="camBtn">câmera: bola</button>
+<div id="fim"><div id="fimTexto">FIM DE JOGO<small>toque na tela para jogar de novo</small></div></div>
+<div class="dica">Arraste na esquerda para correr · <b>CHUTE</b> (segure = mais forte) · <b>PASSE</b> · teclado: WASD, espaço chuta, J passa, C troca a câmera</div>
+<script>
+(function(){
+"use strict";
+/* =====================================================================
+   GOALBLADE — protótipo 3: 5×5 básico (ordem do dono, 24/09/2026)
+   "promissor, não há necessidade de aplicar vários modos, inicialmente
+    começaremos com algo básico de só 5x5"
+   O que este arquivo mostra: o jogo como ele será jogado na 0.1 —
+   campo society pequeno, 5 de cada lado, bonecos desenhados, campo de
+   verdade, câmera que segue a bola (com opção de seguir o jogador),
+   saída de bola, cronômetro, placar, passe e chute.
+   ===================================================================== */
+
+var cv = document.getElementById('c'), ctx = cv.getContext('2d');
+var W=0,H=0,DPR=1;
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.floor(W*DPR); cv.height = Math.floor(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------- o campo: society 5×5, pequeno, como pedido ---------- */
+var F = {w:620, h:380, goal:0.22, area:0.20, areaH:0.62, sixH:0.30};
+var PER = 5;                       // 5 jogadores de cada lado
+var VIEW_H = 250;                  // quanto de campo cabe na tela
+var FS = F.w/1000;                 // tudo acompanha o tamanho do campo
+var RP = 10*FS, RB = 5.5*FS;
+var MAXV = 205*FS, ACC = 1150*FS, DEC = 1250*FS;
+var BFRI = 1.05, BSTOP = 7*FS;
+var SHOT_MIN = 430*FS, SHOT_MAX = 1070*FS, CHARGE_TIME = 0.65;
+var PASS_POW = 0.42;               // força do passe em relação ao chute
+var KICK_NEAR = [780*FS, 1010*FS], KICK_FAR = [560*FS, 780*FS];
+var CTRL = RP+RB+9*FS, SHOT_RANGE = 36*FS, LEAD = 40*FS;
+var MEIO_TEMPO = 180;              // 3 minutos (1º tempo)
+
+/* formação 2-1-1 + goleiro (o dono controla o atacante) */
+var FORM = [[0.06,0.50],[0.26,0.32],[0.26,0.68],[0.48,0.50],[0.68,0.50]];
+var USER_INDEX = 4;
+
+/* ---------- estado ---------- */
+var mates, foes, player, ball, cam;
+var score = [0,0], freeze = 0, flash = 0, power = 0, charging = false;
+var camMode = 'ball';              // 'ball' = segue a bola (padrão) | 'player' = segue o jogador
+var ballRoll = 0, relogio = MEIO_TEMPO, fim = false, proximo = 'nos';
+
+function makeTeam(userIdx, sideRight){
+  var list = [];
+  for(var i=0;i<PER;i++){
+    var hx = FORM[i][0]*F.w, hy = FORM[i][1]*F.h;
+    if(sideRight) hx = F.w - hx;
+    list.push({home:{x:hx,y:hy}, x:hx, y:hy, vx:0, vy:0,
+      fx: sideRight?-1:1, fy:0, phase: Math.random()*6,
+      gk:(i===0), num:i+1, user:false, cd:0, dive:0, diveCd:0});
+  }
+  if(userIdx !== null) list[userIdx].user = true;
+  return list;
+}
+function resetMatch(){
+  mates = makeTeam(USER_INDEX, false);
+  foes  = makeTeam(null, true);
+  player = mates[USER_INDEX];
+  score = [0,0]; relogio = MEIO_TEMPO; fim = false;
+  document.getElementById('fim').style.display = 'none';
+  updatePlacar();
+  kickoff('nos');
+}
+function kickoff(quem){                       // quem sai com a bola: 'nos' | 'deles'
+  ball = {x:F.w*0.5, y:F.h*0.5, vx:0, vy:0};
+  mates = makeTeam(USER_INDEX, false);
+  foes  = makeTeam(null, true);
+  player = mates[USER_INDEX];
+  var time = (quem==='nos') ? mates : foes;
+  var lado = (quem==='nos') ? -1 : 1;
+  var cand = null, bd = 1e9;
+  for(var i=0;i<time.length;i++){
+    if(time[i].gk || time[i].user) continue;
+    var d = Math.hypot(time[i].x-ball.x, time[i].y-ball.y);
+    if(d < bd){ bd = d; cand = time[i]; }
+  }
+  if(cand){ cand.x = ball.x + lado*24*FS; cand.y = ball.y + 6*FS; }
+  if(quem==='nos'){ player.x = ball.x - 34*FS; player.y = ball.y - 10*FS; }
+  cam = {x:ball.x, y:ball.y};
+  freeze = 0; power = 0; charging = false; ballRoll = 0;
+}
+function updatePlacar(){
+  document.getElementById('placar').innerHTML =
+    'NÓS <b>'+score[0]+'</b> × <b>'+score[1]+'</b> ELES &nbsp;<span id="relogio">1º tempo ' + fmtTempo(relogio) + '</span>';
+}
+function fmtTempo(s){
+  s = Math.max(0, Math.ceil(s));
+  return Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2);
+}
+
+/* ---------- comando: teclado + toque ---------- */
+var keys = {};
+window.addEventListener('keydown', function(e){
+  if(e.key===' '||e.key.indexOf('Arrow')===0) e.preventDefault();
+  if(e.key==='c'||e.key==='C') toggleCam();
+  keys[e.key] = true;
+});
+window.addEventListener('keyup', function(e){ keys[e.key] = false; });
+
+var stick = {on:false, id:null, bx:0, by:0, x:0, y:0};
+var shootBtn = {on:false, id:null}, passBtn = {on:false, id:null};
+var STICK_R = 62;
+function shootPos(){ return {x: W-74, y: H-78, r: 56}; }
+function passPos(){  return {x: W-196, y: H-58, r: 40}; }
+
+cv.addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  if(fim){ resetMatch(); return; }
+  var s = shootPos(), p = passPos();
+  if(Math.hypot(e.clientX-s.x, e.clientY-s.y) < s.r*1.3){
+    shootBtn.on = true; shootBtn.id = e.pointerId; charging = true; power = 0;
+  } else if(Math.hypot(e.clientX-p.x, e.clientY-p.y) < p.r*1.3){
+    passBtn.on = true; passBtn.id = e.pointerId; passar();
+  } else if(e.clientX > W*0.55){
+    /* nada: toque na área dos botões sem acertar */
+  } else {
+    stick.on = true; stick.id = e.pointerId;
+    stick.bx = stick.x = e.clientX; stick.by = stick.y = e.clientY;
+  }
+  if(cv.setPointerCapture) cv.setPointerCapture(e.pointerId);
+}, {passive:false});
+cv.addEventListener('pointermove', function(e){
+  if(stick.on && e.pointerId===stick.id){ stick.x = e.clientX; stick.y = e.clientY; }
+});
+function endPointer(e){
+  if(stick.on && e.pointerId===stick.id){ stick.on = false; stick.id = null; }
+  if(shootBtn.on && e.pointerId===shootBtn.id){ shootBtn.on=false; shootBtn.id=null; charging=false; chutar(); }
+  if(passBtn.on && e.pointerId===passBtn.id){ passBtn.on = false; passBtn.id = null; }
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+
+function toggleCam(){
+  camMode = (camMode==='ball') ? 'player' : 'ball';
+  var el = document.getElementById('camBtn');
+  if(el) el.textContent = (camMode==='ball') ? 'câmera: bola' : 'câmera: jogador';
+}
+document.getElementById('camBtn').addEventListener('click', toggleCam);
+document.getElementById('fim').addEventListener('click', function(){ resetMatch(); });
+
+function input(){
+  var ix=0, iy=0;
+  if(keys['ArrowLeft']||keys['a']||keys['A']) ix -= 1;
+  if(keys['ArrowRight']||keys['d']||keys['D']) ix += 1;
+  if(keys['ArrowUp']||keys['w']||keys['W']) iy -= 1;
+  if(keys['ArrowDown']||keys['s']||keys['S']) iy += 1;
+  if(keys[' ']){ if(!charging){ charging = true; power = 0; } }
+  else if(charging && shootBtn.id===null){ charging = false; chutar(); }
+  if((keys['j']||keys['J']) && !passBtn.lock){ passar(); passBtn.lock = true; }
+  if(!keys['j'] && !keys['J']) passBtn.lock = false;
+  if(stick.on){
+    var dx = stick.x-stick.bx, dy = stick.y-stick.by, d = Math.hypot(dx,dy);
+    if(d > 8){ var m = Math.min(1, d/STICK_R); ix = dx/d*m; iy = dy/d*m; }
+  }
+  return {x:ix, y:iy};
+}
+
+/* ---------- chute e passe ---------- */
+function pertoDaBola(){ return Math.hypot(ball.x-player.x, ball.y-player.y) < SHOT_RANGE; }
+function chutar(){
+  if(!pertoDaBola()){ power = 0; return; }
+  var ax, ay, ps = Math.hypot(player.vx, player.vy);
+  if(ps > 25*FS){ ax = player.fx; ay = player.fy; }
+  else { var d = Math.hypot(ball.x-player.x, ball.y-player.y)||1; ax = (ball.x-player.x)/d; ay = (ball.y-player.y)/d; }
+  var v = SHOT_MIN + (SHOT_MAX-SHOT_MIN)*power;
+  ball.vx = ax*v; ball.vy = ay*v;
+  flash = 0.12; power = 0; player.cd = 0.25;
+}
+function passar(){
+  if(!pertoDaBola()) return;
+  /* procura o companheiro melhor colocado à frente */
+  var melhor = null, nota = -1e9;
+  for(var i=0;i<mates.length;i++){
+    var c = mates[i];
+    if(c === player || c.gk) continue;
+    var dx = c.x-player.x, dy = c.y-player.y, d = Math.hypot(dx,dy);
+    if(d < 12*FS || d > F.w*0.55) continue;
+    var ganho = (c.x - player.x) - d*0.35;                  // prefere quem está à frente
+    if(ganho > nota){ nota = ganho; melhor = c; }
+  }
+  var ax, ay;
+  if(melhor){
+    var dx2 = melhor.x-player.x, dy2 = melhor.y-player.y, d2 = Math.hypot(dx2,dy2)||1;
+    ax = dx2/d2; ay = dy2/d2;
+  } else { ax = player.fx; ay = player.fy; }
+  var v = SHOT_MAX*PASS_POW*(1 + Math.min(0.5, Math.hypot(player.vx,player.vy)/MAXV*0.4));
+  ball.vx = ax*v; ball.vy = ay*v;
+  flash = 0.08; player.cd = 0.2;
+}
+
+/* ---------- passo fixo: 60 vezes por segundo ---------- */
+function step(dt){
+  if(fim) return;
+  if(freeze > 0){
+    freeze -= dt;
+    if(freeze <= 0) kickoff(proximo);
+    return;
+  }
+  relogio -= dt;
+  if(relogio <= 0){ relogio = 0; acabar(); return; }
+
+  var inp = input(), il = Math.hypot(inp.x, inp.y);
+  if(il > 1){ inp.x/=il; inp.y/=il; il = 1; }
+  if(il > 0.08){
+    player.vx += inp.x*ACC*dt; player.vy += inp.y*ACC*dt;
+    player.fx = inp.x/(il||1); player.fy = inp.y/(il||1);
+  } else {
+    var s = Math.hypot(player.vx, player.vy);
+    if(s>0){ var k = Math.min(s, DEC*dt); player.vx -= player.vx/s*k; player.vy -= player.vy/s*k; }
+  }
+  var sp = Math.hypot(player.vx, player.vy);
+  if(sp > MAXV){ player.vx = player.vx/sp*MAXV; player.vy = player.vy/sp*MAXV; sp = MAXV; }
+  player.x += player.vx*dt; player.y += player.vy*dt;
+  player.phase += (sp/FS)*dt*0.09;
+
+  for(var t=0;t<2;t++){
+    var team = t===0? mates : foes;
+    for(var i=0;i<team.length;i++) if(!team[i].user) moveNPC(team[i], team, dt);
+  }
+
+  /* bola */
+  ball.vx -= ball.vx*BFRI*dt; ball.vy -= ball.vy*BFRI*dt;
+  var bs = Math.hypot(ball.vx, ball.vy);
+  if(bs < BSTOP){ ball.vx = 0; ball.vy = 0; }
+  ball.x += ball.vx*dt; ball.y += ball.vy*dt;
+  ballRoll += bs*dt;
+
+  /* toque na bola: quem está mais perto age primeiro */
+  var todos = mates.concat(foes);
+  todos.sort(function(a,b){
+    return Math.hypot(a.x-ball.x,a.y-ball.y) - Math.hypot(b.x-ball.x,b.y-ball.y);
+  });
+  for(var k2=0;k2<todos.length;k2++){
+    var q = todos[k2];
+    if(q.user) touchBall(q, true); else touchBall(q, false);
+    if(q.cd === 0.7) break;
+  }
+  clampAll();
+
+  if(ball.x + RB < 0 && Math.abs(ball.y-F.h*0.5) < GOAL_H()*0.5){ gol(1); return; }
+  if(ball.x - RB > F.w && Math.abs(ball.y-F.h*0.5) < GOAL_H()*0.5){ gol(0); return; }
+  outOfPlay();
+
+  if(charging) power = Math.min(1, power + dt/CHARGE_TIME);
+  updateCamera(dt);
+  if(flash > 0) flash -= dt;
+}
+function GOAL_H(){ return F.h*F.goal; }
+function acabar(){
+  fim = true;
+  document.getElementById('fim').style.display = 'grid';
+  var el = document.getElementById('fimTexto');
+  if(el) el.innerHTML =
+    (score[0]===score[1] ? 'EMPATE ' : (score[0]>score[1] ? 'VITÓRIA NOSSA: ' : 'DERROTA: ')) +
+    score[0] + ' × ' + score[1] + '<small>toque na tela para jogar de novo</small>';
+}
+
+function moveNPC(p, team, dt){
+  var tx, ty;
+  var chase = nearestToBall(team);
+  if(p.gk){
+    var metaX = (p.home.x < F.w*0.5) ? 0 : F.w;
+    var distGol = Math.hypot(ball.x-metaX, ball.y-F.h*0.5);
+    var sentido = (metaX === 0) ? 1 : -1;
+    /* fica na linha entre a bola e o meio do gol (cobre o ângulo) */
+    tx = metaX + sentido*F.w*0.045;
+    var alvo = F.h*0.5 + (ball.y-F.h*0.5)*0.55;
+    var lim = GOAL_H()*0.46;
+    ty = Math.max(F.h*0.5-lim, Math.min(F.h*0.5+lim, alvo));
+    if(distGol < F.w*0.10 && p.diveCd <= 0){ p.dive = 0.30; p.diveCd = 1.5; }   // sai para abafar
+    if(p.diveCd > 0) p.diveCd -= dt;
+    if(p.dive > 0) p.dive -= dt;
+  } else if(chase === p){
+    tx = ball.x; ty = ball.y;
+  } else {
+    tx = p.home.x + (ball.x - F.w*0.5)*0.18;
+    ty = p.home.y + (ball.y - F.h*0.5)*0.28;
+  }
+  var dx = tx-p.x, dy = ty-p.y, d = Math.hypot(dx,dy);
+  var ax = 0, ay = 0;
+  if(d > 4){ ax = dx/d; ay = dy/d; }
+  p.vx += ax*ACC*0.92*dt; p.vy += ay*ACC*0.92*dt;
+  var s2 = Math.hypot(p.vx,p.vy), mv = MAXV*(p.gk ? 0.60 : 0.88);
+  if(s2 > mv){ p.vx = p.vx/s2*mv; p.vy = p.vy/s2*mv; s2 = mv; }
+  if(d <= 4){ p.vx -= p.vx*Math.min(1, 3*dt); p.vy -= p.vy*Math.min(1, 3*dt); }
+  p.x += p.vx*dt; p.y += p.vy*dt;
+  var vel = Math.hypot(p.vx,p.vy);
+  if(vel > 12){ p.fx = p.vx/vel; p.fy = p.vy/vel; }
+  p.phase += (vel/FS)*dt*0.09;
+  if(p.cd > 0) p.cd -= dt;
+}
+function nearestToBall(team){
+  var best = team[0], bd = 1e9;
+  for(var i=0;i<team.length;i++){
+    if(team[i].gk || team[i].user) continue;
+    var d = Math.hypot(team[i].x-ball.x, team[i].y-ball.y);
+    if(d < bd){ bd = d; best = team[i]; }
+  }
+  return best;
+}
+function afastar(p, raio){
+  var dx = ball.x-p.x, dy = ball.y-p.y, d = Math.hypot(dx,dy);
+  if(d < raio){
+    var nx = dx/(d||1), ny = dy/(d||1), push = raio-d;
+    ball.x += nx*push; ball.y += ny*push;
+    return {d:d, nx:nx, ny:ny};
+  }
+  return null;
+}
+function touchBall(p, isUser){
+  var raio = (p.gk && p.dive > 0) ? (RP+RB)*2.1 : RP+RB;   // goleiro mergulha: abafa mais longe
+  var toque = afastar(p, raio);
+  if(!toque){
+    if(isUser && p.cd <= 0){                               // domínio de bola correndo
+      var dd = Math.hypot(ball.x-p.x, ball.y-p.y);
+      if(dd < CTRL && Math.hypot(p.vx,p.vy) > 25*FS){
+        var sp = Math.hypot(p.vx,p.vy);
+        var tx = p.fx*Math.max(sp*1.2, 95*FS), ty = p.fy*Math.max(sp*1.2, 95*FS);
+        ball.vx += (tx-ball.vx)*0.30; ball.vy += (ty-ball.vy)*0.30;
+      }
+    }
+    return;
+  }
+  var nx = toque.nx, ny = toque.ny;
+  if(isUser){
+    if(p.cd > 0) return;                                   // acabou de chutar/passar
+    var ps = Math.hypot(p.vx,p.vy);
+    if(ps > 25*FS){                                        // correndo: condução
+      ball.vx = nx*Math.max(ps*1.15, 60*FS);
+      ball.vy = ny*Math.max(ps*1.15, 60*FS);
+    } else {                                               // parado: amortece a bola
+      ball.vx *= 0.30; ball.vy *= 0.30;
+      ball.vx += nx*18*FS; ball.vy += ny*18*FS;
+    }
+    return;
+  }
+  if(p.cd > 0) return;
+  var gx = (p.home.x < F.w*0.5) ? F.w : 0;
+  var perto = Math.hypot(gx-ball.x, F.h*0.5-ball.y) < F.w*0.45;
+  var canto = (Math.random() < 0.5 ? -1 : 1) * GOAL_H()*0.40;
+  var ruido = perto ? F.h*0.08 : F.h*0.18;
+  var ang = Math.atan2(F.h*0.5 + canto - ball.y + (Math.random()-0.5)*ruido, gx-ball.x);
+  var v = perto ? (KICK_NEAR[0] + Math.random()*(KICK_NEAR[1]-KICK_NEAR[0]))
+                : (KICK_FAR[0]  + Math.random()*(KICK_FAR[1]-KICK_FAR[0]));
+  ball.vx = Math.cos(ang)*v; ball.vy = Math.sin(ang)*v;
+  p.cd = 0.7;
+}
+function clampAll(){
+  var all = mates.concat(foes);
+  for(var i=0;i<all.length;i++){
+    all[i].x = Math.max(5, Math.min(F.w-5, all[i].x));
+    all[i].y = Math.max(5, Math.min(F.h-5, all[i].y));
+  }
+  var vmax = Math.hypot(ball.vx, ball.vy), limite = 900*FS;
+  if(vmax > limite){ ball.vx = ball.vx/vmax*limite; ball.vy = ball.vy/vmax*limite; }
+}
+function outOfPlay(){
+  if(ball.y - RB < 0){ ball.y = RB; ball.vy = 0; ball.vx *= 0.3; }
+  if(ball.y + RB > F.h){ ball.y = F.h-RB; ball.vy = 0; ball.vx *= 0.3; }
+  if(ball.x + RB < 0){ ball.x = F.w*0.06; ball.y = Math.max(F.h*0.16, Math.min(F.h*0.84, ball.y)); ball.vx = 0; ball.vy = 0; }
+  if(ball.x - RB > F.w){ ball.x = F.w*0.94; ball.y = Math.max(F.h*0.16, Math.min(F.h*0.84, ball.y)); ball.vx = 0; ball.vy = 0; }
+}
+function gol(quem){
+  score[quem]++;
+  updatePlacar();
+  proximo = (quem === 0) ? 'deles' : 'nos';    // quem levou o gol sai com a bola
+  freeze = 1.5;
+}
+function updateCamera(dt){
+  var tx, ty;
+  if(camMode === 'ball'){
+    var bs = Math.hypot(ball.vx, ball.vy);
+    tx = ball.x + (bs>1? ball.vx/bs*LEAD : 0);
+    ty = ball.y + (bs>1? ball.vy/bs*LEAD : 0);
+  } else {
+    tx = player.x + player.fx*LEAD*0.65; ty = player.y + player.fy*LEAD*0.65;
+  }
+  cam.x += (tx-cam.x)*Math.min(1, dt*6);
+  cam.y += (ty-cam.y)*Math.min(1, dt*6);
+}
+
+/* ---------- desenho ---------- */
+function render(){
+  var scale = H/VIEW_H, vw = W/scale, vh = VIEW_H;
+  var camx = (vw < F.w) ? Math.max(vw/2, Math.min(F.w-vw/2, cam.x)) : F.w/2;
+  var camy = (vh < F.h) ? Math.max(vh/2, Math.min(F.h-vh/2, cam.y)) : F.h/2;
+
+  ctx.fillStyle = '#0d1b0e'; ctx.fillRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(W/2, H/2); ctx.scale(scale, scale); ctx.translate(-camx, -camy);
+
+  drawPitch();
+  var all = mates.concat(foes);
+  for(var i=0;i<all.length;i++) drawBallShadow(all[i].x, all[i].y, RP*0.95, RP*0.5);
+  drawBallShadow(ball.x, ball.y, RB*0.95, RB*0.5);
+  var ordem = all.slice().sort(function(a,b){ return a.y-b.y; });
+  for(var i2=0;i2<ordem.length;i2++) drawPlayer(ordem[i2], foes.indexOf(ordem[i2]) >= 0);
+  drawBall();
+
+  if(charging && power > 0){
+    ctx.strokeStyle = 'rgba(255,226,122,.75)'; ctx.lineWidth = 2.4*FS;
+    ctx.beginPath(); ctx.arc(player.x, player.y, RP+6*FS, -Math.PI/2, -Math.PI/2 + Math.PI*2*power); ctx.stroke();
+  }
+  ctx.restore();
+
+  drawBotoes();
+  if(freeze > 0){
+    ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font = 'bold ' + Math.round(Math.min(72, H*0.11)) + 'px system-ui, sans-serif';
+    ctx.shadowColor = '#000'; ctx.shadowBlur = 16; ctx.fillStyle = '#ffe27a';
+    ctx.fillText('GOL!', W/2, H*0.36);
+    ctx.restore();
+  }
+}
+function drawBotoes(){
+  var s = shootPos(), p = passPos();
+  ctx.save();
+  ctx.fillStyle = charging ? 'rgba(255,226,122,.28)' : 'rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#eef6ef'; ctx.font = 'bold 15px system-ui, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('CHUTE', s.x, s.y);
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.stroke();
+  ctx.fillStyle = '#eef6ef'; ctx.font = 'bold 12.5px system-ui, sans-serif';
+  ctx.fillText('PASSE', p.x, p.y);
+  if(charging && power > 0){
+    ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r+9,-Math.PI/2,-Math.PI/2 + Math.PI*2*power); ctx.stroke();
+  }
+  if(stick.on){
+    ctx.globalAlpha = .5; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(stick.bx, stick.by, STICK_R, 0, Math.PI*2); ctx.stroke();
+    var dx2 = stick.x-stick.bx, dy2 = stick.y-stick.by, dd = Math.hypot(dx2,dy2);
+    var m = dd > STICK_R ? STICK_R/dd : 1;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(stick.bx+dx2*m, stick.by+dy2*m, 26, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawPitch(){
+  ctx.fillStyle = '#2f6b34'; ctx.fillRect(-6000,-6000,12000,12000);
+  var band = F.w/10;
+  for(var i=0;i<10;i++){
+    ctx.fillStyle = (i%2 ? '#356f38' : '#2e6632');
+    ctx.fillRect(i*band, 0, band, F.h);
+  }
+  ctx.fillStyle = 'rgba(20,44,22,.85)';
+  ctx.fillRect(-6000,-6000,12000,6000); ctx.fillRect(-6000,F.h,12000,6000);
+  ctx.fillRect(-6000,0,F.w+6000,F.h);   ctx.fillRect(F.w,0,6000,F.h);
+  ctx.fillStyle = 'rgba(255,255,255,.03)';
+  for(var n=0;n<160;n++){
+    var rx = (n*97 % 1000)/1000*F.w, ry = (n*173 % 1000)/1000*F.h;
+    ctx.fillRect(rx, ry, 2.2, 2.2);
+  }
+  var LW = Math.max(1.6, F.w/560);
+  ctx.strokeStyle = 'rgba(255,255,255,.88)'; ctx.lineWidth = LW;
+  ctx.strokeRect(0,0,F.w,F.h);
+  ctx.beginPath(); ctx.moveTo(F.w/2,0); ctx.lineTo(F.w/2,F.h); ctx.stroke();
+  ctx.beginPath(); ctx.arc(F.w/2,F.h/2,F.w*0.085,0,Math.PI*2); ctx.stroke();
+  dot(F.w/2, F.h/2, LW*1.7);
+  var aw = F.area*F.w, ah = F.areaH*F.h, sw = aw*0.42, sh = F.sixH*F.h;
+  ctx.strokeRect(0, F.h/2-ah/2, aw, ah);            ctx.strokeRect(F.w-aw, F.h/2-ah/2, aw, ah);
+  ctx.strokeRect(0, F.h/2-sh/2, sw, sh);            ctx.strokeRect(F.w-sw, F.h/2-sh/2, sw, sh);
+  dot(aw*0.72, F.h/2, LW*1.6); dot(F.w-aw*0.72, F.h/2, LW*1.6);
+  ctx.beginPath(); ctx.arc(0,0,F.w*0.018,0,Math.PI/2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(F.w,0,F.w*0.018,Math.PI/2,Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,F.h,F.w*0.018,-Math.PI/2,0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(F.w,F.h,F.w*0.018,Math.PI,Math.PI*1.5); ctx.stroke();
+  flag(0,0); flag(F.w,0); flag(0,F.h); flag(F.w,F.h);
+  goalFrame(0,true); goalFrame(F.w,false);
+}
+function dot(x,y,r){ ctx.fillStyle='rgba(255,255,255,.88)'; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+function flag(x,y){
+  var up = (y===0 ? 1 : -1), h = F.h*0.05, lx = (x===0 ? 1 : -1);
+  ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth = Math.max(1.2, F.w/900);
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x, y-up*h); ctx.stroke();
+  ctx.fillStyle = '#ffe27a';
+  ctx.beginPath(); ctx.moveTo(x, y-up*h); ctx.lineTo(x+lx*h*0.8, y-up*h*0.72); ctx.lineTo(x, y-up*h*0.45); ctx.closePath(); ctx.fill();
+}
+function goalFrame(x, isLeft){
+  var gh = GOAL_H(), d = F.w*0.028, dir = isLeft? -1 : 1;
+  ctx.strokeStyle = 'rgba(255,255,255,.30)'; ctx.lineWidth = Math.max(0.7, F.w/1600);
+  for(var i=1;i<7;i++){
+    var yy = F.h/2-gh/2 + i*gh/7;
+    ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x+dir*d, yy); ctx.stroke();
+  }
+  for(var j=1;j<4;j++){
+    var xx = x + dir*(d*j/4);
+    ctx.beginPath(); ctx.moveTo(xx, F.h/2-gh/2); ctx.lineTo(xx, F.h/2+gh/2); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.06)';
+  ctx.fillRect(Math.min(x, x+dir*d), F.h/2-gh/2, d, gh);
+  ctx.strokeStyle = '#f4f7f4'; ctx.lineWidth = Math.max(2.2, F.w/420);
+  ctx.beginPath(); ctx.moveTo(x, F.h/2-gh/2); ctx.lineTo(x+dir*d, F.h/2-gh/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, F.h/2+gh/2); ctx.lineTo(x+dir*d, F.h/2+gh/2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+dir*d, F.h/2-gh/2); ctx.lineTo(x+dir*d, F.h/2+gh/2); ctx.stroke();
+}
+function drawBallShadow(x,y,rx,ry){ ctx.fillStyle='rgba(0,0,0,.30)'; ctx.beginPath(); ctx.ellipse(x+1.5,y+3.5,rx,ry,0,0,Math.PI*2); ctx.fill(); }
+
+function drawPlayer(p, isFoe){
+  var shirt = isFoe ? '#2f5ede' : '#e8453c';
+  var shirtDark = isFoe ? '#2246a8' : '#b8302a';
+  var shorts = isFoe ? '#12224a' : '#f2f4f7';
+  var skin = '#e8b98e', hair = '#2a1d16';
+  var dirx = (p.fx < -0.15) ? -1 : 1;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  if(p.user){
+    ctx.strokeStyle = 'rgba(255,226,122,.85)'; ctx.lineWidth = 1.8*FS;
+    ctx.beginPath(); ctx.ellipse(0, 2*FS, RP*1.5, RP*0.9, 0, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.scale(dirx*FS, FS);
+  var spd = Math.hypot(p.vx, p.vy)/MAXV;
+  var swing = Math.sin(p.phase)*3.6*Math.max(0.25, spd);
+  ctx.fillStyle = '#f0f2f3';
+  roundRect(-4.6, 2.2 + swing, 4.2, 8.0, 2.0); fill();
+  ctx.fillStyle = '#dfe2e4';
+  roundRect(0.4, 2.2 - swing, 4.2, 8.0, 2.0); fill();
+  ctx.fillStyle = '#1b1b1b';
+  roundRect(-4.6, 8.2 + swing, 4.2, 3.0, 1.4); fill();
+  roundRect(0.4, 8.2 - swing, 4.2, 3.0, 1.4); fill();
+  ctx.fillStyle = shorts; roundRect(-5.6, -3.0, 11.2, 6.4, 2.4); fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 0.8; roundRect(-5.6,-3.0,11.2,6.4,2.4); ctx.stroke();
+  ctx.fillStyle = shirt; roundRect(-6.4, -11.5, 12.8, 9.4, 3.2); fill();
+  ctx.fillStyle = shirtDark; roundRect(-6.4, -11.5, 12.8, 2.2, 1.6); fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 0.8; roundRect(-6.4,-11.5,12.8,9.4,3.2); ctx.stroke();
+  ctx.fillStyle = shirt;
+  roundRect(-8.6,-10.6,3.0,5.0,1.4); fill();
+  roundRect(5.6,-10.6,3.0,5.0,1.4); fill();
+  ctx.fillStyle = skin;
+  roundRect(-9.4,-6.4,2.6,5.2,1.3); fill();
+  roundRect(6.8,-6.4,2.6,5.2,1.3); fill();
+  ctx.fillStyle = isFoe ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.92)';
+  ctx.font = 'bold 7px system-ui, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(String(p.num), 0, -7.0);
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(0,-13.4,4.6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = hair; ctx.beginPath(); ctx.arc(0,-14.6,4.6,Math.PI*1.02,Math.PI*1.98); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.10)'; ctx.beginPath(); ctx.arc(0,-13.4,4.6,Math.PI*0.15,Math.PI*0.85); ctx.fill();
+  ctx.restore();
+}
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function fill(){ ctx.fill(); }
+
+function drawBall(){
+  var bs = Math.hypot(ball.vx, ball.vy);
+  if(bs > 260*FS){                                  // rastro do chute forte
+    for(var s=1;s<=3;s++){
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.18/s) + ')';
+      ctx.beginPath(); ctx.arc(ball.x - ball.vx*0.012*s, ball.y - ball.vy*0.012*s, RB*(1-s*0.18), 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.save(); ctx.translate(ball.x, ball.y); ctx.rotate(ballRoll*0.09);
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0,0,RB,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 0.9*FS; ctx.stroke();
+  ctx.fillStyle = '#242424';
+  ctx.beginPath(); ctx.arc(0,0,1.9*FS,0,Math.PI*2); ctx.fill();
+  for(var i=0;i<5;i++){
+    var a = i*Math.PI*2/5;
+    ctx.beginPath(); ctx.arc(Math.cos(a)*3.4*FS, Math.sin(a)*3.4*FS, 1.25*FS, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---------- laço principal: desenha sempre, simula em passo fixo ---------- */
+var last = (typeof performance!=='undefined' && performance.now) ? performance.now() : 0, acc = 0, STEP = 1/60;
+function frame(now){
+  var dt = Math.min(0.05, (now-last)/1000); last = now; acc += dt;
+  var guard = 0;
+  while(acc >= STEP && guard < 5){ step(STEP); acc -= STEP; guard++; }
+  if(guard === 5) acc = 0;
+  render();
+  requestAnimationFrame(frame);
+}
+resetMatch();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

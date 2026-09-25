@@ -1,0 +1,417 @@
+extends Node2D
+## GoalBlade — IA AVANÇADA v7 (25/09/2026)
+## Dificuldade alta + parceira inteligente: joga como humano, pensa e faz estrategia.
+## Voce move 1 botao (ata), os outros 4 do seu time pensam com voce: abrem, triangulam,
+## pedem passe, ocupam espaco livre e nao roubam sua bola. O adversario pressiona, marca,
+## intercepta e finaliza como gente — nao de qualquer jeito.
+
+var jogo = null
+var time := 0
+var numero := 1
+var funcao := "def"
+var casa := Vector2.ZERO
+var vel := Vector2.ZERO
+var direcao := Vector2.RIGHT
+var cd := 0.0
+var dive := 0.0
+var dive_cd := 0.0
+var fase := 0.0
+var eh_usuario := false
+var alvo := Vector2.ZERO
+var pensar_cd := 0.0
+var acabou_de_chutar := false
+
+func velocidade() -> float:
+	return vel.length()
+
+# ---------------------------------------------------------------- movimento
+func aplicar_movimento(dir: Vector2, dt: float, vel_max: float, acel: float = GB.ACC) -> void:
+	if dir.length() > 0.08:
+		vel += dir.normalized() * acel * dt
+		direcao = dir.normalized()
+	else:
+		var s := vel.length()
+		if s > 0.0:
+			vel -= vel / s * minf(s, GB.DEC * dt)
+	var v := vel.length()
+	if v > vel_max:
+		vel = vel / v * vel_max
+		v = vel_max
+	position += vel * dt
+	fase += (v / GB.FS) * dt * 0.09
+	passo += (v / GB.MAXV) * dt * 3.0
+	position.x = clampf(position.x, 5.0, GB.F_W - 5.0)
+	position.y = clampf(position.y, 5.0, GB.F_H - 5.0)
+
+# ---------------------------------------------------------------- IA — pensa como humano dificil
+func pensar(dt: float) -> void:
+	cd = maxf(0.0, cd - dt)
+	if dive > 0.0:
+		dive -= dt
+	if dive_cd > 0.0:
+		dive_cd -= dt
+	pensar_cd -= dt
+	if pensar_cd <= 0.0:
+		# adversario pensa mais rapido (mais dificil), parceiro um pouco mais devagar mas ainda inteligente
+		pensar_cd = 0.09 if time == 1 else 0.11
+		alvo = calcular_alvo()
+	var vel_max := GB.MAXV * (0.96 if time == 1 else 0.90)
+	if funcao == "gol":
+		vel_max = GB.MAXV * (1.02 if dive > 0.0 else 0.86)
+	# se estou com a bola colada, conduzo com mais explosao
+	if jogo.bola.dono == self and position.distance_to(jogo.bola.position) < GB.CTRL * 1.3:
+		vel_max *= 1.08
+	aplicar_movimento(alvo - position, dt, vel_max)
+
+func calcular_alvo() -> Vector2:
+	var bola: Vector2 = jogo.bola.position
+	if funcao == "gol":
+		return alvo_goleiro(bola)
+	# se sou o dono da bola: conducao inteligente (nao sou cacador)
+	if jogo.bola.dono == self and position.distance_to(bola) < GB.CTRL * 1.4:
+		return alvo_conducao(bola)
+	if jogo.sou_cassador(self):
+		return alvo_cassador_avancado(bola)
+	if jogo.posse == time and jogo.posse != -1:
+		return alvo_apoio_avancado(bola)
+	if jogo.posse == 1 - time:
+		return alvo_marcacao_avancada(bola)
+	return alvo_formacao_avancada(bola)
+
+# ------------------------------- caca a bola — interceptacao e pressao humana
+func alvo_cassador_avancado(bola: Vector2) -> Vector2:
+	var gol := Vector2(GB.F_W if time == 0 else 0.0, GB.F_H * 0.5)
+	var vb := jogo.bola.vel
+	# antecipa a bola: intercepta onde ela vai estar, nao onde esta
+	var bola_futura := bola + vb * 0.22
+	if vb.length() > 90:
+		bola_futura = bola + vb * 0.30
+	# corrige se a bola vai bater na mureta (quica) — antecipa o quique
+	if bola_futura.x < GB.RB: bola_futura.x = GB.RB + 8
+	if bola_futura.x > GB.F_W - GB.RB: bola_futura.x = GB.F_W - GB.RB - 8
+	if bola_futura.y < GB.RB: bola_futura.y = GB.RB + 8
+	if bola_futura.y > GB.F_H - GB.RB: bola_futura.y = GB.F_H - GB.RB - 8
+	var dir_gol := (gol - bola_futura).normalized() if (gol - bola_futura).length() > 0.01 else Vector2(1 if time==0 else -1, 0)
+	# chega por tras da bola, na linha para o gol — posicao de chutador
+	var atras := bola_futura - dir_gol * 11.5
+	# pequena correcao lateral para cortar linha de passe adversaria
+	var desvio := Vector2.ZERO
+	for adv in jogo.adversarios_de(self):
+		if adv.funcao == "gol": continue
+		var rel := adv.position - bola_futura
+		if rel.length() < 28.0:
+			# se adversario esta na frente, desloca para bloquear
+			desvio += Vector2(0, signf(bola_futura.y - adv.position.y) * 9.0)
+	# nao atropela o usuario: se usuario esta indo na bola, deixo espaço
+	if not eh_usuario:
+		var u = jogo.usuario
+		if u and u.time == time and u.position.distance_to(bola_futura) < 36.0:
+			# recua levemente para nao disputar com o humano
+			atras += (position - u.position).normalized() * 14.0
+	return atras + desvio + separacao() + _evitar_parede(atras)
+
+func alvo_conducao(bola: Vector2) -> Vector2:
+	# estou com a bola: avanço como humano — procuro corredor livre, nao corro em linha reta contra muro
+	var frente := 1.0 if time == 0 else -1.0
+	var gol := Vector2(GB.F_W if time == 0 else 0.0, GB.F_H * 0.5)
+	var dir_gol := (gol - position).normalized()
+	# avalia 3 direcoes (frente, diagonal cima, diagonal baixo) e escolhe a mais livre
+	var melhor := position + dir_gol * 80.0
+	var melhor_score := -1e9
+	for ang_deg in [0.0, -28.0, 28.0, -52.0, 52.0]:
+		var ang := deg_to_rad(ang_deg)
+		var dir := dir_gol.rotated(ang) if time==0 else dir_gol.rotated(-ang)
+		var cand := position + dir * 72.0
+		cand.x = clampf(cand.x, GB.F_W*0.08, GB.F_W*0.92)
+		cand.y = clampf(cand.y, GB.F_H*0.08, GB.F_H*0.92)
+		var score := 0.0
+		# progresso a frente vale
+		score += (cand.x - position.x) * frente * 0.6
+		# espaco livre vale muito (nao entra em aglomerado)
+		var livres := _abertura(cand)
+		score += livres * 1.4
+		# ficar na frente da defesa adversaria vale
+		var y_adv_media := 0.0
+		for a in jogo.adversarios_de(self):
+			y_adv_media += a.position.y
+		y_adv_media /= max(1, jogo.adversarios_de(self).size())
+		# penaliza ir muito para o mesmo lado que o usuario ja esta
+		var u = jogo.usuario
+		if u and u.time == time and cand.distance_to(u.position) < 38:
+			score -= 30
+		if score > melhor_score:
+			melhor_score = score
+			melhor = cand
+	return melhor + separacao()
+
+# ------------------------------- apoio — joga JUNTO com o humano, nao aleatorio
+func alvo_apoio_avancado(bola: Vector2) -> Vector2:
+	# quem tem a bola?
+	var dono = jogo.bola.dono
+	var lider_pos := bola
+	var lider_vel := Vector2.ZERO
+	var lider_frente := Vector2(1 if time==0 else -1, 0)
+	if dono != null and dono.time == time:
+		lider_pos = dono.position
+		lider_vel = dono.vel
+		lider_frente = dono.direcao if dono.vel.length() > 12 else Vector2(1 if time==0 else -1, 0)
+	else:
+		# bola solta mas nosso time tem posse: apoia a bola
+		lider_pos = bola
+	# se o lider eh o usuario: eu existo para DAR linha de passe, nao para roubar
+	var sou_parceiro_do_usuario := dono != null and dono.eh_usuario and time == 0
+	# cada funcao tem um setor preferido (triangulacao)
+	var frente := 1.0 if time == 0 else -1.0
+	var lateral := 1.0 if casa.y < GB.F_H*0.5 else -1.0
+	var setor_ang := 0.0
+	var setor_dist := 92.0
+	if funcao == "def":
+		# defs abrem na largura, atras ou na linha da bola (seguranca + saida)
+		setor_ang = lateral * 62.0
+		setor_dist = 88.0
+		if sou_parceiro_do_usuario:
+			# da opcao de recuo seguro para o humano sair jogando
+			setor_dist = 72.0
+			setor_ang = lateral * 48.0
+	elif funcao == "mei":
+		# meia infiltra entre linhas, cria triangulo
+		setor_ang = lateral * 18.0
+		setor_dist = 96.0
+		if lider_pos.x * frente > GB.F_W*0.62:
+			# ataque: meia entra na area
+			setor_ang = lateral * 8.0
+			setor_dist = 108.0
+	else:
+		# ata (se nao for o usuario) — profundidade maxima
+		setor_ang = lateral * 12.0
+		setor_dist = 112.0
+	# gera 5 candidatos ao redor do setor e escolhe o mais LIVRE e mais a frente
+	var melhor := lider_pos + Vector2(frente * 70, lateral*50)
+	var melhor_score := -1e9
+	var base_ang := lider_frente.angle()
+	for i in range(5):
+		var d_ang := deg_to_rad(setor_ang + [-18, -9, 0, 9, 18][i])
+		var ang := base_ang + d_ang
+		var dist: float = setor_dist + [-12, -6, 0, 6, 12][i]
+		var cand := lider_pos + Vector2(cos(ang), sin(ang)) * dist
+		# prediz movimento do lider
+		cand += lider_vel * 0.14
+		cand.x = clampf(cand.x, GB.F_W*0.10, GB.F_W*0.90)
+		cand.y = clampf(cand.y, GB.F_H*0.12, GB.F_H*0.88)
+		var score := 0.0
+		# 1) progresso
+		score += (cand.x - lider_pos.x) * frente * 0.55
+		# 2) largura (estica a defesa)
+		score += absf(cand.y - lider_pos.y) * 0.18
+		# 3) abertura (quanto mais longe do adversario, melhor)
+		var abertura := _abertura(cand)
+		score += abertura * 1.6
+		# 4) linha de passe livre (sem adversario no meio)
+		if _passe_livre(lider_pos, cand, 22.0):
+			score += 28
+		else:
+			score -= 22
+		# 5) nao amontoa com companheiros
+		for c in jogo.time_de(self):
+			if c == self: continue
+			var d2 := c.position.distance_to(cand)
+			if d2 < 44: score -= (44 - d2) * 1.1
+		# 6) se usuario tem a bola, prioriza dar 2 opcoes claras (um de cada lado) — nao corrige, mas pontua mais quem esta no lado oposto ao adversario
+		if sou_parceiro_do_usuario:
+			# fica visivel para o humano (sem adversario entre usuario e eu)
+			if _passe_livre(lider_pos, cand, 20.0):
+				score += 18
+			# nao fica colado no usuario
+			var du := cand.distance_to(lider_pos)
+			if du < 48: score -= (48 - du) * 1.2
+			if du > 132: score -= (du - 132) * 0.6
+		if score > melhor_score:
+			melhor_score = score
+			melhor = cand
+	# se ainda estiver muito perto do portador, afasta (da espaco)
+	if lider_pos.distance_to(melhor) < 46.0:
+		melhor += (melhor - lider_pos).normalized() * 18.0
+	return melhor + separacao()
+
+# ------------------------------- marcacao — marca gente de verdade, nao segue a bola
+func alvo_marcacao_avancada(bola: Vector2) -> Vector2:
+	# escolhe o adversario mais perigoso (nao o mais proximo de mim)
+	var escolhido = null
+	var melhor_ameaca := -1e9
+	var minha_meta := Vector2(0 if time==0 else GB.F_W, GB.F_H*0.5)
+	var ja_marcados := {}
+	for c in jogo.time_de(self):
+		if c == self or c.funcao == "gol": continue
+		# quem ja esta marcando alguem, marca quem ele marca para nao duplicar
+		var alvo_c = c.alvo
+		for adv in jogo.adversarios_de(self):
+			if adv.position.distance_to(alvo_c) < 22.0:
+				ja_marcados[adv] = true
+	for adv in jogo.adversarios_de(self):
+		if adv.funcao == "gol": continue
+		if ja_marcados.has(adv): continue
+		var d_bola := adv.position.distance_to(bola)
+		var d_meta := adv.position.distance_to(minha_meta)
+		var ameaca := 0.0
+		ameaca += 260.0 / (d_bola + 22.0)
+		ameaca += 220.0 / (d_meta + 28.0)
+		# quem esta nas costas da defesa vale mais
+		ameaca += (adv.position.x - minha_meta.x) * (1 if time==0 else -1) * 0.08
+		# quem esta livre vale mais
+		ameaca += _abertura(adv.position) * 0.10
+		# bonus para quem o humano vai enfrentar (adversario do usuario)
+		var u = jogo.usuario
+		if u and adv.position.distance_to(u.position) < 38.0:
+			ameaca += 18
+		if ameaca > melhor_ameaca:
+			melhor_ameaca = ameaca
+			escolhido = adv
+	if escolhido == null:
+		return alvo_formacao_avancada(bola)
+	# posicao de marcacao: entre ele e nossa meta, 18px a frente dele, mais 6px para o lado da bola (corta linha de passe)
+	var para_meta := (minha_meta - escolhido.position).normalized() if (minha_meta - escolhido.position).length() > 0.01 else Vector2(1,0)
+	var ponto := escolhido.position + para_meta * 18.0
+	var lateral_bola := (bola - escolhido.position).normalized() * 6.0
+	ponto += lateral_bola
+	# se a bola esta longe, nao cola no adversario, mantem zona
+	var d_bola_ate_mim := position.distance_to(bola)
+	if d_bola_ate_mim > 140:
+		# recua para compactar
+		ponto = ponto.lerp(minha_meta + (escolhido.position - minha_meta)*0.5, 0.35)
+	ponto.x = clampf(ponto.x, 8, GB.F_W-8)
+	ponto.y = clampf(ponto.y, 8, GB.F_H-8)
+	return ponto + separacao()
+
+# ------------------------------- formacao — time respira junto, nao fica estatico
+func alvo_formacao_avancada(bola: Vector2) -> Vector2:
+	var centro := Vector2(GB.F_W*0.5, GB.F_H*0.5)
+	var desloc := (bola - centro) * 0.18
+	# basculamento: se adversario tem a bola, recua a linha; se temos, avanca
+	if jogo.posse == 1 - time:
+		desloc.x *= 0.7
+		# linha defensiva compacta
+		if funcao == "def":
+			desloc.x -= (1 if time==0 else -1) * 18.0
+	elif jogo.posse == time:
+		desloc.x += (1 if time==0 else -1) * 12.0
+	# defs mantem largura, meis centralizam levemente
+	if funcao == "mei":
+		desloc.y *= 0.6
+	var alvo_base := casa + desloc
+	alvo_base.x = clampf(alvo_base.x, GB.F_W*0.08, GB.F_W*0.92)
+	alvo_base.y = clampf(alvo_base.y, GB.F_H*0.08, GB.F_H*0.92)
+	return alvo_base + separacao()
+
+func alvo_goleiro(pos_bola: Vector2) -> Vector2:
+	var vel_bola: Vector2 = jogo.bola.vel
+	var meta_x := 0.0 if casa.x < GB.F_W*0.5 else GB.F_W
+	var sentido := 1.0 if meta_x == 0.0 else -1.0
+	var centro := Vector2(meta_x, GB.F_H*0.5)
+	var dg := pos_bola.distance_to(centro)
+	# predicao precisa para interceptar chute rasteiro
+	if vel_bola.length() > 55.0 and absf(vel_bola.x) > 1.0:
+		var indo := (meta_x - pos_bola.x) * signf(vel_bola.x) > 0.0
+		var t: float = (meta_x - pos_bola.x) / vel_bola.x
+		if indo and t > 0.0 and t < 0.80:
+			var prev: Vector2 = pos_bola + vel_bola * t
+			# considera quique na mureta no trajeto?
+			if absf(prev.y - centro.y) < GB.GOAL_H*0.92:
+				return Vector2(meta_x + sentido * 4.2, clampf(prev.y, centro.y - GB.GOAL_H*0.66, centro.y + GB.GOAL_H*0.66))
+	if jogo.posse == 1 - time and dg < GB.F_W*0.18:
+		return pos_bola
+	if jogo.posse == time:
+		return Vector2(meta_x + sentido * GB.F_W * 0.038, centro.y + (pos_bola.y - centro.y)*0.32)
+	var base_x := meta_x + sentido * clampf(dg*0.11, 7.0, 26.0)
+	var y := centro.y + (pos_bola.y - centro.y)*0.64
+	y = clampf(y, centro.y - GB.GOAL_H*0.60, centro.y + GB.GOAL_H*0.60)
+	return Vector2(base_x, y)
+
+# ------------------------------- helpers inteligentes
+func _abertura(pos: Vector2) -> float:
+	var menor := 1e9
+	for adv in jogo.adversarios_de(self):
+		var d := adv.position.distance_to(pos)
+		if d < menor: menor = d
+	return menor if menor < 1e8 else 80.0
+
+func _passe_livre(orig: Vector2, dest: Vector2, raio: float) -> bool:
+	var seg := dest - orig
+	var len := seg.length()
+	if len < 0.01: return true
+	var dir := seg / len
+	for adv in jogo.adversarios_de(self):
+		if adv.funcao == "gol": continue
+		var rel := adv.position - orig
+		var proj := rel.dot(dir)
+		if proj < 8 or proj > len - 8: continue
+		var perp := (rel - dir * proj).length()
+		if perp < raio:
+			return false
+	return true
+
+func _evitar_parede(p: Vector2) -> Vector2:
+	# nao cola na mureta, deixa 12px de recuo para a bola quicar
+	var corr := Vector2.ZERO
+	if p.x < 14: corr.x += 14 - p.x
+	if p.x > GB.F_W - 14: corr.x -= p.x - (GB.F_W -14)
+	if p.y < 14: corr.y += 14 - p.y
+	if p.y > GB.F_H - 14: corr.y -= p.y - (GB.F_H -14)
+	return corr
+
+func separacao() -> Vector2:
+	var fora := Vector2.ZERO
+	for c in jogo.time_de(self):
+		if c == self: continue
+		var d: Vector2 = position - c.position
+		var l := d.length()
+		if l < 42.0 and l > 0.01:
+			fora += d / l * (42.0 - l) * 1.25
+	var dono = jogo.bola.dono
+	if dono != null and dono != self and dono.time == time:
+		var db: Vector2 = position - jogo.bola.position
+		var lb := db.length()
+		if lb < 54.0 and lb > 0.01:
+			fora += db / lb * (54.0 - lb) * 1.35
+	return fora
+
+# ---------------------------------------------------------------- desenho
+const FOLHA := "res://arte/jogadores.png"
+const Q_W := 144.0
+const Q_H := 160.0
+const POSES := ["parado", "c0", "c1", "c2", "c3", "chute", "dividida", "comemora"]
+const ESCALA := 0.56
+var sprite: Sprite2D = null
+var atlas: AtlasTexture = null
+var passo := 0.0
+var _linha := 0
+func _ready() -> void:
+	alvo = position
+	_linha = (numero - 1) if time == 0 else (numero + 4)
+	atlas = AtlasTexture.new()
+	atlas.atlas = load(FOLHA)
+	atlas.region = Rect2(0, 0, Q_W, Q_H)
+	sprite = Sprite2D.new()
+	sprite.texture = atlas
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	sprite.scale = Vector2(ESCALA, ESCALA)
+	add_child(sprite)
+func _pose() -> String:
+	if dive > 0.0 or acabou_de_chutar:
+		return "chute"
+	var v := velocidade()
+	if v > GB.MAXV * 0.22:
+		return ["c0", "c1", "c2", "c3"][int(passo * 4.0) % 4]
+	if v > GB.MAXV * 0.06:
+		return "c0"
+	return "parado"
+func _draw() -> void:
+	var profundidade := clampf(position.y / GB.F_H, 0.0, 1.0)
+	var escala_perspectiva := ESCALA * lerpf(0.90, 1.08, profundidade)
+	sprite.scale = Vector2(escala_perspectiva, escala_perspectiva)
+	z_index = 10 + int(position.y)
+	var a := fposmod(90.0 - rad_to_deg(direcao.angle()), 360.0)
+	var ca := int(round(a / 45.0)) % 8
+	var ci := POSES.find(_pose())
+	atlas.region = Rect2(ca * 8.0 * Q_W + ci * Q_W, _linha * Q_H, Q_W, Q_H)
+	if eh_usuario:
+		draw_arc(Vector2.ZERO, 9.0, 0.0, TAU, 24, Color(1.0, 0.886, 0.478, 0.55), 1.1)

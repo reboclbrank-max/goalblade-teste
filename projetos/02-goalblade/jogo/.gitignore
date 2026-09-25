@@ -1,0 +1,4 @@
+# O que o Godot gera e não precisa entrar no repositório (recomendação oficial da Godot)
+.godot/
+export/
+# (os arquivos .import e .uid ao lado dos arquivos do projeto SÃO versionados de propósito)

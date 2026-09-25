@@ -1,0 +1,278 @@
+{
+ "historico": [
+  {
+   "quando": "24/09/2026 19:35",
+   "nota": 1,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "consistencia.duplicado",
+    "gdscript.balanco",
+    "marketing.parado",
+    "repo.nao_salvo",
+    "segredos.gitignore"
+   ],
+   "erros": 3,
+   "avisos": 59
+  },
+  {
+   "quando": "24/09/2026 19:35",
+   "nota": 47,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "consistencia.duplicado",
+    "gdscript.balanco",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo",
+    "segredos.gitignore"
+   ],
+   "erros": 3,
+   "avisos": 9
+  },
+  {
+   "quando": "24/09/2026 19:35",
+   "nota": 83,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 5
+  },
+  {
+   "quando": "24/09/2026 19:36",
+   "nota": 83,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 5
+  },
+  {
+   "quando": "24/09/2026 19:37",
+   "nota": 84,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 4
+  },
+  {
+   "quando": "24/09/2026 19:37",
+   "nota": 96,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "marketing.parado"
+   ],
+   "erros": 0,
+   "avisos": 4
+  },
+  {
+   "quando": "24/09/2026 19:56",
+   "nota": 84,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 4
+  },
+  {
+   "quando": "24/09/2026 20:16",
+   "nota": 81,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "godot.pck_grande",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 6
+  },
+  {
+   "quando": "24/09/2026 20:16",
+   "nota": 83,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 5
+  },
+  {
+   "quando": "25/09/2026 10:57",
+   "nota": 80,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "godot.pck_grande",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 7
+  },
+  {
+   "quando": "25/09/2026 11:01",
+   "nota": 82,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 11:04",
+   "nota": 82,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 11:16",
+   "nota": 94,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado"
+   ],
+   "erros": 0,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 11:28",
+   "nota": 82,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 11:30",
+   "nota": 94,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado"
+   ],
+   "erros": 0,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 11:32",
+   "nota": 94,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado"
+   ],
+   "erros": 0,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 11:47",
+   "nota": 80,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "godot.pck_grande",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 7
+  },
+  {
+   "quando": "25/09/2026 11:48",
+   "nota": 94,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado"
+   ],
+   "erros": 0,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 17:53",
+   "nota": 94,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado"
+   ],
+   "erros": 0,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 17:54",
+   "nota": 82,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 17:54",
+   "nota": 82,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 6
+  },
+  {
+   "quando": "25/09/2026 18:13",
+   "nota": 82,
+   "ids": [
+    "consistencia.arquivo_citado",
+    "links.quebrado",
+    "marketing.parado",
+    "repo.nao_salvo"
+   ],
+   "erros": 1,
+   "avisos": 6
+  }
+ ],
+ "recorrentes": {
+  "gdscript.balanco": 4,
+  "segredos.gitignore": 3,
+  "marketing.parado": 22,
+  "consistencia.arquivo_citado": 129,
+  "consistencia.duplicado": 6,
+  "repo.nao_salvo": 16,
+  "links.quebrado": 18,
+  "godot.pck_grande": 3
+ },
+ "baselines": {}
+}
